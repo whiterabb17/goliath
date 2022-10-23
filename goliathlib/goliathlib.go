@@ -1,4 +1,4 @@
-package main
+package goliath
 
 import (
 	"bufio"
@@ -743,7 +743,7 @@ func init() {
 	}
 }
 
-func main() {
+func runscan() {
 	flag.Parse()
 	log.SetFlags(0)
 	if outfile != "" {
