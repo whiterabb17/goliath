@@ -1,4 +1,4 @@
-package main
+package goliath
 
 import (
 	"bufio"
@@ -489,6 +489,14 @@ func FileReadlines(readfile string) []string {
 
 var (
 	// args
+	collectPackets      bool
+	ps                  bool
+	provTarget          string
+	collectIF           bool
+	sniff               string
+	iFace               string
+	snapLen             string
+	promisc             string
 	portRanges          string
 	numOfgoroutine      int
 	outfile             string
@@ -697,7 +705,16 @@ Options:
 }
 
 func init() {
+	flag.BoolVar(&collectIF, "listIface", false, " Only list available network interfaces")
+	flag.StringVar(&sniff, "net", "cap", " To start Sniffing Traffic")
+	flag.StringVar(&iFace, "if", "", " The network interface to listen on")
+	flag.StringVar(&promisc, "promisc", "n", " Whether to run the scan in Promiscous Mode")
+	flag.StringVar(&snapLen, "slen", "2048", " Length of the snapshot to capture")
+	flag.BoolVar(&collectPackets, "keep", false, " Flag Save packets to .pcap file for analysis")
+
 	// Target
+	flag.BoolVar(&ps, "ps", false, " Flag Used to specify portscan")
+	flag.StringVar(&provTarget, "tar", "", " String   Single target to port scan (Can be used multiple times)")
 	flag.StringVar(&infile, "i", "", " File   Target input from list")
 	flag.BoolVar(&ignoreErrHost, "I", false, "        Ignore the wrong address and continue scanning")
 	flag.StringVar(&gatewayRanges, "g", "", " Net    Intranet gateway address range (10/172/192/all)")
@@ -809,30 +826,47 @@ func main() {
 	}
 
 	wg := sync.WaitGroup{}
-	rawtargetChan := make(chan string, timeout)
-	for i := 0; i <= numOfgoroutine; i++ {
-		go func() {
-			for rawTarget := range rawtargetChan {
-				err := ParseTarget(rawTarget, defaultPorts)
-				mutex.Lock()
-				if err != nil {
-					if ignoreErrHost {
-						log.Printf("# Wrong target: %s", rawTarget)
-					} else {
-						ErrPrint(fmt.Sprintf("Wrong target: %s", rawTarget))
-					}
+	if rawTargets != nil {
+		rawtargetChan := make(chan string, timeout)
+		for i := 0; i <= numOfgoroutine; i++ {
+			go func() {
+				for rawTarget := range rawtargetChan {
+					err := ParseTarget(rawTarget, defaultPorts)
+					mutex.Lock()
+					if err != nil {
+						if ignoreErrHost {
+							log.Printf("# Wrong target: %s", rawTarget)
+						} else {
+							ErrPrint(fmt.Sprintf("Wrong target: %s", rawTarget))
+						}
 
+					}
+					mutex.Unlock()
+					wg.Done()
 				}
-				mutex.Unlock()
-				wg.Done()
+			}()
+		}
+		for _, rawTarget := range RemoveRepeatedElement(rawTargets) {
+			rawtargetChan <- rawTarget
+			wg.Add(1)
+		}
+		wg.Wait()
+	} else {
+		go func() {
+			err := ParseTarget(provTarget, defaultPorts)
+			mutex.Lock()
+			if err != nil {
+				if ignoreErrHost {
+					log.Printf("# Wrong target: %s", provTarget)
+				} else {
+					ErrPrint(fmt.Sprintf("Wrong target: %s", provTarget))
+				}
+
 			}
+			mutex.Unlock()
+			wg.Done()
 		}()
 	}
-	for _, rawTarget := range RemoveRepeatedElement(rawTargets) {
-		rawtargetChan <- rawTarget
-		wg.Add(1)
-	}
-	wg.Wait()
 
 	// exclude ports
 	if excludePortRanges != "" {
@@ -855,29 +889,45 @@ func main() {
 		os.Exit(0)
 	}
 
-	if hostTotal == 0 {
-		flag.Usage()
+	if collectIF {
+		ListDevices()
+	}
+	if sniff != "" {
+		if sniff == "cap" {
+			if iFace != "" && snapLen != "" && promisc != "" {
+				SharkWire(iFace, snapLen, promisc, collectPackets)
+			}
+		}
 	}
 
-	EchoModePrompt := ""
-	if echoMode && !udpmode {
-		EchoModePrompt = " (TCP Echo)"
+	if hostTotal == 0 {
+		if !collectIF {
+			if sniff == "" {
+				flag.Usage()
+			}
+		}
 	}
-	if udpmode {
-		EchoModePrompt = " (UDP Spray)"
-	}
-	log.Printf("# %s Start scanning %d hosts...%s (reqs: %d)\n\n", startTime.Format("2006/01/02 15:04:05"), hostTotal, EchoModePrompt, total)
-	PortScan()
-	spendTime := time.Since(startTime).Seconds()
-	pps := int(float64(total) / spendTime)
-	if pps > total {
-		pps = total
-	}
-	aliveRate := hostUpCount * 100.0 / hostTotal
-	endTime := time.Now().Format("2006/01/02 15:04:05")
-	log.Printf("\n# %s Finished %d tasks.\n", endTime, total)
-	log.Printf("# up: %d%% (%d/%d), discard: %d, open: %d, pps: %d, time: %s\n", aliveRate, hostUpCount, hostTotal, hostDiscard, openCount, pps, secondToTime(int(spendTime)))
-	if outfile != "" {
-		log.Printf("# Save the result to \"%s\"\n", outfile)
+	if ps {
+		EchoModePrompt := ""
+		if echoMode && !udpmode {
+			EchoModePrompt = " (TCP Echo)"
+		}
+		if udpmode {
+			EchoModePrompt = " (UDP Spray)"
+		}
+		log.Printf("# %s Start scanning %d hosts...%s (reqs: %d)\n\n", startTime.Format("2006/01/02 15:04:05"), hostTotal, EchoModePrompt, total)
+		PortScan()
+		spendTime := time.Since(startTime).Seconds()
+		pps := int(float64(total) / spendTime)
+		if pps > total {
+			pps = total
+		}
+		aliveRate := hostUpCount * 100.0 / hostTotal
+		endTime := time.Now().Format("2006/01/02 15:04:05")
+		log.Printf("\n# %s Finished %d tasks.\n", endTime, total)
+		log.Printf("# up: %d%% (%d/%d), discard: %d, open: %d, pps: %d, time: %s\n", aliveRate, hostUpCount, hostTotal, hostDiscard, openCount, pps, secondToTime(int(spendTime)))
+		if outfile != "" {
+			log.Printf("# Save the result to \"%s\"\n", outfile)
+		}
 	}
 }
