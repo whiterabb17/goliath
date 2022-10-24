@@ -489,6 +489,7 @@ func FileReadlines(readfile string) []string {
 
 var (
 	// args
+	keep                bool
 	collectPackets      bool
 	ps                  bool
 	provTarget          string
@@ -496,7 +497,7 @@ var (
 	sniff               string
 	iFace               string
 	snapLen             string
-	promisc             string
+	promisc             bool
 	portRanges          string
 	numOfgoroutine      int
 	outfile             string
@@ -708,9 +709,9 @@ func init() {
 	flag.BoolVar(&collectIF, "listIface", false, " Only list available network interfaces")
 	flag.StringVar(&sniff, "net", "cap", " To start Sniffing Traffic")
 	flag.StringVar(&iFace, "if", "", " The network interface to listen on")
-	flag.StringVar(&promisc, "promisc", "n", " Whether to run the scan in Promiscous Mode")
+	flag.BoolVar(&promisc, "promisc", false, " Whether to run the scan in Promiscous Mode")
 	flag.StringVar(&snapLen, "slen", "2048", " Length of the snapshot to capture")
-	flag.BoolVar(&collectPackets, "keep", false, " Flag Save packets to .pcap file for analysis")
+	flag.BoolVar(&keep, "keep", false, " Flag Specifies whether traffic should be written to a log")
 
 	// Target
 	flag.BoolVar(&ps, "ps", false, " Flag Used to specify portscan")
@@ -898,8 +899,8 @@ func main() {
 	}
 	if sniff != "" {
 		if sniff == "cap" {
-			if iFace != "" && snapLen != "" && promisc != "" {
-				SharkWire(iFace, snapLen, promisc, collectPackets)
+			if iFace != "" && snapLen != "" {
+				SharkWire(iFace, snapLen, promisc, keep)
 			}
 		}
 	}

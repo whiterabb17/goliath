@@ -55,12 +55,13 @@ func ListDevices() string {
 			fmt.Println()
 		}
 	}
+	writeLog(ifaces, "NetworkInterfaces")
 	return ifaces
 }
 
 func LiveCapture(collect bool) {
 	handle, err = pcap.OpenLive(device, snapshotLen, promiscuous, timeOut)
-	var collectedPackets string
+	var dumpedPackets string
 	if err != nil {
 		log.Fatal(err)
 	} else {
@@ -75,12 +76,30 @@ func LiveCapture(collect bool) {
 
 		for packet := range packetSource.Packets() {
 			fmt.Println(packet)
-			collectedPackets += packet.Dump() + "\n"
+			dumpedPackets += "\n\n====================================================================================================\n" + packet.Dump() + "\n====================================================================================================\n\n"
 			if collect {
-				w.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
+				writeLog(dumpedPackets, "PacketDump")
 			}
 		}
 	}
+}
+
+func writeLog(input string, file string) {
+	f, err := os.Create(file + ".log")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer f.Close()
+
+	_, err2 := f.WriteString(input)
+
+	if err2 != nil {
+		log.Fatal(err2)
+	}
+
+	fmt.Println("done")
 }
 
 func WritingToPCAPFile(filter string) {
@@ -337,7 +356,7 @@ func Decoder() {
 	DecodingPacket()
 }
 
-func SharkWire(iface string, slen string, promisc string, collect bool) {
+func SharkWire(iface string, slen string, promisc bool, keep bool) {
 	device = iface
 	var snapshotLen int
 	snapshotLen, err = strconv.Atoi(slen)
@@ -347,16 +366,11 @@ func SharkWire(iface string, slen string, promisc string, collect bool) {
 	if snapshotLen < 1024 || snapshotLen > 65535 {
 		snapshotLen = 1024
 	}
-	c := promisc
-	if c == "Y" || c == "y" {
-		promiscuous = true
-	} else if c == "N" || c == "n" {
-		promiscuous = false
-	}
-	LiveCapture(collect)
+	promiscuous = promisc
+	LiveCapture(keep)
 }
 
-func SharkWireW(iface string, slen string, promisc string, filter string) {
+func SharkWireW(iface string, slen string, promisc bool, filter string) {
 	device = iface
 	snapshotLen, err := strconv.Atoi(slen)
 	if err != nil {
@@ -365,16 +379,10 @@ func SharkWireW(iface string, slen string, promisc string, filter string) {
 	if snapshotLen < 1024 || snapshotLen > 65535 {
 		snapshotLen = 1024
 	}
-	c := promisc
-	if c == "Y" || c == "y" {
-		promiscuous = true
-	} else if c == "N" || c == "n" {
-		promiscuous = false
-	}
+
+	promiscuous = promisc
 
 	layer = layers.LinkTypeIPv4
-
-	fmt.Println("Writing Data to File...")
 
 	UsingFilters(filter)
 
