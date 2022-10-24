@@ -760,6 +760,10 @@ func init() {
 	}
 }
 
+func ListIface() {
+	ListDevices()
+}
+
 func main() {
 	flag.Parse()
 	log.SetFlags(0)

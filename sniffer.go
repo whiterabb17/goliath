@@ -30,26 +30,32 @@ var (
 	err         error
 )
 
-func ListDevices() {
+func ListDevices() string {
 	devices, err := pcap.FindAllDevs()
-
+	var ifaces string
 	if err != nil {
 		log.Fatal(err)
 	} else {
 		fmt.Println("List of Devices Found:")
+		ifaces = "List of Devices Found: \n"
 		for _, device := range devices {
 			fmt.Println("Name:", device.Name)
+			ifaces += "Name: " + device.Name + " \n"
 			fmt.Println("Description:", device.Description)
+			ifaces += "Description: " + device.Description + "\n"
 			fmt.Println("Addresses:", device.Addresses)
-
+			ifaces += "Addresses: \n"
 			for _, address := range device.Addresses {
 				fmt.Println("\t - IP Address:", address.IP)
+				ifaces += "\t - IP Address: " + string(address.IP) + "\n"
 				fmt.Println("\t - Subnet Mask:", address.Netmask)
+				ifaces += "\t - Subnet Mask: " + string(address.Netmask) + "\n"
 			}
 
 			fmt.Println()
 		}
 	}
+	return ifaces
 }
 
 func LiveCapture(collect bool) {
