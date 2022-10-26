@@ -1,4 +1,4 @@
-package main
+package goliath
 
 import (
 	"fmt"
@@ -77,6 +77,7 @@ func LiveCapture(collect bool) {
 		defer f.Close()
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 		count := 0
+		loop := 0
 		//wg := &sync.WaitGroup{}
 		//wg.Add(1)
 		fName := time.Now().Format("2006-01-02 3-4-5") + "-Capture"
@@ -90,6 +91,10 @@ func LiveCapture(collect bool) {
 				if count > 50 {
 					fName = time.Now().Format("2006-01-02 3-4-5") + "-Capture"
 					count = 0
+					loop++
+				}
+				if loop == 4 {
+					break
 				}
 			}
 			time.Sleep(time.Millisecond * 500)
