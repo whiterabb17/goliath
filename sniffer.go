@@ -1,10 +1,9 @@
-package goliath
+package main
 
 import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -55,7 +54,11 @@ func ListDevices() string {
 			fmt.Println()
 		}
 	}
+
+	//wg := &sync.WaitGroup{}
+	//	wg.Add(1)
 	writeLog(ifaces, "NetworkInterfaces")
+	//	wg.Wait()
 	return ifaces
 }
 
@@ -73,13 +76,23 @@ func LiveCapture(collect bool) {
 
 		defer f.Close()
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-
+		count := 0
+		//wg := &sync.WaitGroup{}
+		//wg.Add(1)
+		fName := time.Now().Format("2006-01-02 3-4-5") + "-Capture"
 		for packet := range packetSource.Packets() {
+			//			wg.Add(1)
 			fmt.Println(packet)
-			dumpedPackets += "\n\n====================================================================================================\n" + packet.Dump() + "\n====================================================================================================\n\n"
+			dumpedPackets += "\n\n====================================================================================================\n" + string(packet.String()) + "\n\n" + packet.Dump() + "\n====================================================================================================\n\n"
 			if collect {
-				writeLog(dumpedPackets, "PacketDump")
+				count++
+				go writeLog(dumpedPackets, fName)
+				if count > 50 {
+					fName = time.Now().Format("2006-01-02 3-4-5") + "-Capture"
+					count = 0
+				}
 			}
+			time.Sleep(time.Millisecond * 500)
 		}
 	}
 }
@@ -100,6 +113,7 @@ func writeLog(input string, file string) {
 	}
 
 	fmt.Println("done")
+	//	wg.Done()
 }
 
 func WritingToPCAPFile(filter string) {
@@ -261,7 +275,13 @@ func PacketInfo(packet gopacket.Packet) {
 	}
 }
 
-func GetPacketInfo() {
+func GetPacketInfo(iface string, slen int, promisc bool) {
+	device = iface
+	snapshotLen = int32(slen)
+	if snapshotLen < 1024 || snapshotLen > 65535 {
+		snapshotLen = 1024
+	}
+	promiscuous = promisc
 	handle, err = pcap.OpenLive(device, snapshotLen, promiscuous, timeOut)
 
 	if err != nil {
@@ -332,37 +352,20 @@ func DecodingPacket() {
 	}
 }
 
-func Decoder() {
-	fmt.Println("Enter Device to Use:")
-	fmt.Scanln(&device)
-
-	fmt.Println("Enter Snapshot Length(Min: 1024, Max: 65535):")
-	fmt.Scanln(&snapshotLen)
-
+func Decoder(iface string, slen int, promisc bool) {
+	device = iface
+	snapshotLen = int32(slen)
 	if snapshotLen < 1024 || snapshotLen > 65535 {
 		snapshotLen = 1024
 	}
-
-	var c string
-	fmt.Println("Promiscuous Mode(N):")
-	fmt.Scanln(&c)
-
-	if c == "Y" || c == "y" {
-		promiscuous = true
-	} else if c == "N" || c == "n" {
-		promiscuous = false
-	}
-
+	promiscuous = promisc
+	log.Println("Beginning packet decoding")
 	DecodingPacket()
 }
 
-func SharkWire(iface string, slen string, promisc bool, keep bool) {
+func SharkWire(iface string, slen int, promisc bool, keep bool) {
 	device = iface
-	var snapshotLen int
-	snapshotLen, err = strconv.Atoi(slen)
-	if err != nil {
-		log.Println(err)
-	}
+	snapshotLen = int32(slen)
 	if snapshotLen < 1024 || snapshotLen > 65535 {
 		snapshotLen = 1024
 	}
@@ -370,23 +373,15 @@ func SharkWire(iface string, slen string, promisc bool, keep bool) {
 	LiveCapture(keep)
 }
 
-func SharkWireW(iface string, slen string, promisc bool, filter string) {
+func SharkFilter(iface string, slen int, promisc bool, filter string, keep bool) {
 	device = iface
-	snapshotLen, err := strconv.Atoi(slen)
-	if err != nil {
-		log.Println(err)
-	}
+	snapshotLen = int32(slen)
 	if snapshotLen < 1024 || snapshotLen > 65535 {
 		snapshotLen = 1024
 	}
-
 	promiscuous = promisc
-
-	layer = layers.LinkTypeIPv4
-
 	UsingFilters(filter)
-
-	WritingToPCAPFile(filter)
-
-	fmt.Println("Process Completed!")
+	if keep {
+		WritingToPCAPFile(filter)
+	}
 }

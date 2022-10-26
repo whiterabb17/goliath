@@ -1,4 +1,4 @@
-package goliath
+package main
 
 import (
 	"bufio"
@@ -490,13 +490,15 @@ func FileReadlines(readfile string) []string {
 var (
 	// args
 	keep                bool
-	collectPackets      bool
+	filterStr           string
 	ps                  bool
+	packetInf           bool
+	decode              bool
 	provTarget          string
 	collectIF           bool
-	sniff               string
+	sniff               bool
 	iFace               string
-	snapLen             string
+	snapLen             int
 	promisc             bool
 	portRanges          string
 	numOfgoroutine      int
@@ -707,11 +709,14 @@ Options:
 
 func init() {
 	flag.BoolVar(&collectIF, "listIface", false, " Only list available network interfaces")
-	flag.StringVar(&sniff, "net", "cap", " To start Sniffing Traffic")
+	flag.BoolVar(&sniff, "sniff", false, " Flag To start Sniffing Traffic")
+	flag.BoolVar(&decode, "decode", false, " Flag To decode packets")
+	flag.BoolVar(&packetInf, "packetInf", false, " Flag To get information on Packets")
 	flag.StringVar(&iFace, "if", "", " The network interface to listen on")
 	flag.BoolVar(&promisc, "promisc", false, " Whether to run the scan in Promiscous Mode")
-	flag.StringVar(&snapLen, "slen", "2048", " Length of the snapshot to capture")
+	flag.IntVar(&snapLen, "slen", 2048, " Length of the snapshot to capture")
 	flag.BoolVar(&keep, "keep", false, " Flag Specifies whether traffic should be written to a log")
+	flag.StringVar(&filterStr, "filter", "", " String The string to filter packets for and write to PCAP")
 
 	// Target
 	flag.BoolVar(&ps, "ps", false, " Flag Used to specify portscan")
@@ -897,17 +902,31 @@ func main() {
 	if collectIF {
 		ListDevices()
 	}
-	if sniff != "" {
-		if sniff == "cap" {
-			if iFace != "" && snapLen != "" {
+	if sniff {
+		if iFace != "" {
+			if filterStr == "" {
+				log.Println("Selected Interface: " + iFace)
 				SharkWire(iFace, snapLen, promisc, keep)
+			} else {
+				log.Println("Selected Interface: " + iFace + " Filter: " + filterStr)
+				SharkFilter(iFace, snapLen, promisc, filterStr, keep)
 			}
+		}
+	}
+	if decode {
+		if iFace != "" {
+			Decoder(iFace, snapLen, promisc)
+		}
+	}
+	if packetInf {
+		if iFace != "" {
+			GetPacketInfo(iFace, snapLen, promisc)
 		}
 	}
 
 	if hostTotal == 0 {
 		if !collectIF {
-			if sniff == "" {
+			if !sniff {
 				flag.Usage()
 			}
 		}
